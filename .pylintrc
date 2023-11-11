@@ -1,0 +1,5 @@
+[MASTER]
+extension-pkg-allow-list=pydantic
+disable=E0401
+[FORMAT]
+max-line-length=120

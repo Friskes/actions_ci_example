@@ -1,0 +1,47 @@
+name: Run tests on any Push event
+
+# Запуск при любом пуше в репозиторий
+# on: [push]
+
+# Запуск при любом push евенте в любой ветке,
+# за исключением релизных тэгов (потому что там будет отдельное тестирование).
+on:
+  push:
+    tags:
+      - '!refs/tags/*'
+    branches:
+      - '*'
+
+jobs:
+  tests:
+
+    runs-on: [ubuntu-latest]
+
+    steps:
+      # - uses: actions/checkout@v3
+      - uses: actions/checkout@master
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+          architecture: 'x64'
+
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Install requirements
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: |
+          pytest ./tests
+
+      - name: Run mypy
+        run: |
+          mypy ./src ./tests
+
+      - name: Run pylint
+        run: |
+          pylint ./src ./tests

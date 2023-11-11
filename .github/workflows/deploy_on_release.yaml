@@ -1,0 +1,87 @@
+name: Publish on Docker Hub and Deploy
+
+# Запуск только при создании нового релиза
+on:
+  release:
+    types: [published]
+
+jobs:
+  tests:
+
+    # Запускаем тесты на последней версии Ubuntu которая есть в GitHub
+    runs-on: [ubuntu-latest]
+
+    steps:
+      # - uses: actions/checkout@v3
+      - uses: actions/checkout@master
+
+      # Устанавливаем Python нужной версии
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+          architecture: 'x64'
+
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Install requirements
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: |
+          pytest ./tests
+
+      - name: Run mypy
+        run: |
+          mypy ./src ./tests
+
+      - name: Run pylint
+        run: |
+          pylint ./src ./tests
+
+  # Если тесты были пройдены успешно запускаем создание докер образа
+  build:
+
+    # делаем зависимость от работы блока tests,
+    # то есть пока не будет успешно выполнен блок tests, блок build не будет запущен
+    needs: [tests]
+
+    runs-on: [ubuntu-latest]
+
+    env:
+      LOGIN_AND_REPO_NAME: ${{ secrets.DOCKER_LOGIN }}/${{ secrets.DOCKER_REPOSITORY_NAME }}
+
+    steps:
+      # Логинимся в DockerHub
+      - name: Login to DockerHub
+        run:  echo ${{ secrets.DOCKER_ACCESS_TOKEN }} | docker login -u ${{ secrets.DOCKER_LOGIN }} --password-stdin
+
+      # - uses: actions/checkout@v3
+      - uses: actions/checkout@master
+
+      # GITHUB_REF/GITHUB_REF_NAME — это переменная гитхаба, в которой хранится строка с референсом на событие
+      # по которому сработал триггер(название ветки, тэг и т.д.), если у нас тэги формата "v0.0.0"
+      # то необходимо обрезать первые 11 символов, тогда останется "0.0.0".
+
+      # Собираем докер образ и называем его так как указано в DockerHub т.е. <login>/<repository>:<version>
+      - name: Build image
+        run: docker build -t $LOGIN_AND_REPO_NAME:${GITHUB_REF:11} -f Dockerfile .
+
+      # Пушим образ в registry докер хаба
+      - name: Push image to DockerHub Registry
+        run: docker push $LOGIN_AND_REPO_NAME:${GITHUB_REF:11}
+
+  # Если мы успешно собрали образ и отправили его в registry, то делаем хук деплоймент серверу
+  deploy:
+    needs: [build]
+    runs-on: [ubuntu-latest]
+
+    steps:
+      # https://github.com/actions/checkout/issues/383#issuecomment-773490029
+      - name: Set tag to env
+        run: echo "RELEASE_VERSION=$(echo ${GITHUB_REF:11})" >> $GITHUB_ENV
+
+      - name: Send webhook for deploy
+        run: "curl --silent --show-error --fail -X POST ${{ secrets.DEPLOYMENT_SERVER_ADDRESS }} -H 'Authorization: ${{ secrets.DEPLOYMENT_TOKEN }}' -H 'Content-Type: application/json' -d '{\"owner\": \"${{ secrets.DOCKER_LOGIN }}\", \"repository\": \"${{ secrets.DOCKER_REPOSITORY_NAME }}\", \"tag\": \"${{ env.RELEASE_VERSION }}\", \"ports\": {\"8080\": 8080}}'"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Deployment web server
+After=network-online.target
+
+[Service]
+Type=simple
+RestartSec=3
+ExecStart=/usr/local/bin/ci_example
+Environment=DEPLOYMENT_TOKEN=<место для вашего токена>
+
+[Install]
+WantedBy=multi-user.target

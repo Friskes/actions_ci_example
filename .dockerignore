@@ -1,0 +1,14 @@
+*.pyc
+*env/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+tests/
+.github/
+ci_app/
+ci_example.service
+.dockerignore
+.gitignore
+.pylintrtc
+mypy.ini
+README.md
